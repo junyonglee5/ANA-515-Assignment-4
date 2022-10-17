@@ -1,0 +1,208 @@
+---
+title: "ANA 515 Assignment 4: Uber Analysis Project"
+author: Jun Yong Lee
+date: 10/16/2022
+output: 
+  html_document:
+    theme:
+      bootswatch: darkly
+---
+
+1. The data used in this analysis regards Uber Rides in NYC in 2014. 
+2. This data is available to download on FiveThirtyEight’s Kaggle Page. It was created by FiveThirtyEight, one of the few organizations to have acquired valuable trip data from Uber. This data includes Uber rides in NYC from April 2014 to September 2014. There are various graphs mentioned in this markdown that mainly use the ggplot function. These graphs are used to analyze the peak times and days during these 6 months. A detailed map is included towards the end of the analysis.
+
+## Installing Packages And Prep
+```{r installing packages, echo=TRUE, message=FALSE, warning=FALSE, results='hide'}
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(lubridate)
+library(scales)
+#packages 'ggthemes', 'DT', 'sf' were not running with the librayr function so I downloaded them separately through Tools -> Install Pacakages.
+```
+The next step is to read the Uber raw data files and assign them to make it easier for our next steps.
+
+```{r reading files}
+#3
+apr_raw <- read.csv("C:\\Users\\Graduate\\Desktop\\McDaniel - MS in Data Analytics\\515 - Fundamentals of Data Storage\\uber-raw-data-apr14.csv")
+may_raw <- read.csv("C:\\Users\\Graduate\\Desktop\\McDaniel - MS in Data Analytics\\515 - Fundamentals of Data Storage\\uber-raw-data-may14.csv")
+jun_raw <- read.csv("C:\\Users\\Graduate\\Desktop\\McDaniel - MS in Data Analytics\\515 - Fundamentals of Data Storage\\uber-raw-data-jun14.csv")
+jul_raw <- read.csv("C:\\Users\\Graduate\\Desktop\\McDaniel - MS in Data Analytics\\515 - Fundamentals of Data Storage\\uber-raw-data-jul14.csv")
+aug_raw <- read.csv("C:\\Users\\Graduate\\Desktop\\McDaniel - MS in Data Analytics\\515 - Fundamentals of Data Storage\\uber-raw-data-aug14.csv")
+sep_raw <- read.csv("C:\\Users\\Graduate\\Desktop\\McDaniel - MS in Data Analytics\\515 - Fundamentals of Data Storage\\uber-raw-data-sep14.csv")
+```
+
+5. We now need to combine the data
+
+```{r Combine}
+uber_data <- rbind(apr_raw, may_raw, jun_raw, jul_raw, aug_raw, sep_raw)
+#To check if this worked we run this
+cat("The dimenions the data contains:", dim(uber_data))
+
+```
+
+Now let us read these data by showing the top 6 rows. 
+
+```{r}
+head(uber_data)
+
+```
+4 + 5. We notice we have 4 columns with Date.Time and Base are factors and Lat and long are 2 doubles. We also notice that our Date, and time are quite confusing to read. We will now change the format of the day, month, year, and time, and put them in a column of their own to make it easier to read and conduct analysis.
+
+```{r Date Format}
+# First we create the formats to M, D, Y
+uber_data$Date.Time <- as.POSIXct(uber_data$Date.Time, 
+                                  format = "%m/%d/%Y %H:%M:%S")
+uber_data$Time <- format(as.POSIXct(uber_data$Date.Time, 
+                                    format = "%m/%d/%Y %H:%M:%S"), 
+                         format="%H:%M:%S")
+uber_data$Date.Time <- ymd_hms(uber_data$Date.Time)
+
+# Next we create individual columns for each
+uber_data$Day <- factor(day(uber_data$Date.Time))
+uber_data$Month <- factor(month(uber_data$Date.Time, label = TRUE))
+uber_data$Year <- factor(year(uber_data$Date.Time))
+uber_data$Hour <- factor(hour(hms(uber_data$Time)))
+uber_data$Minute <- factor(minute(hms(uber_data$Time)))
+uber_data$Second <- factor(second(hms(uber_data$Time)))
+
+# We can also add what day of the week it is 
+uber_data$Day_of_week <- factor(wday(uber_data$Date.Time, label = TRUE))
+```
+
+Now we have done those, we can look at our table now.
+
+```{r}
+# Lets look at the top 6 rows now. 
+head(uber_data)
+```
+
+4. We have data of `r nrow(uber_data)` uber rides and the dataset has `r ncol(uber_data)` columns. The names of the columns and a brief description of each are in the table below:
+
+```{r, include=TRUE}
+knitr::kable(head(uber_data[, 1:8]), "simple")
+```
+
+## Analysis
+
+#### Uber Trips Per Hour
+6. Now we have our table, it is easier to group them by any category to start our analysis. I want to find out peak times for Uber rides in a day taking all the dates into factor.
+
+```{r trips per hour table}
+# To do that let us first create a new table called trips_per_hour
+#To do that let us first create a new table called trips_per_hour
+trips_per_hour <-
+  uber_data %>%
+  group_by(Hour) %>% 
+  summarize(Total = n())
+data.frame(trips_per_hour) 
+
+# Lets have a look at it in descending order to see the peak times
+
+arrange(trips_per_hour, - Total)
+           
+```
+
+6 + 7. This gives us an idea of Uber rides peak times. According to above, it looks like hours between 5pm and 8pm is the peak. Let us plot it into a graph to look at it even better. 
+
+```{r ggplot 1}
+ggplot(trips_per_hour, aes(Hour, Total)) +
+  geom_bar(stat = "identity", fill="DarkOrange", color="LightGreen") +
+  labs(
+    title = "Uber Trips Per Hour Of The Day",
+    subtitle = "(April 2014 - Sep 2014)",
+    caption = "Data from Uber Rides in NYC dataset",
+    x = "Hours",
+    y = "Total Rides"
+  ) +
+  scale_y_continuous(labels = comma)
+```
+
+We can make our **First Hypothesis**.
+**H1**: **Peak times for Uber Rides in NYC during 2014 were mostly in the evening with 5 PM being the busiest. **
+
+#### Uber Trips Per Hour with Months
+Let us add months to the table as well, to see how the months affect the data.
+
+```{r ggplot 2}
+
+Month_Hour <-
+  uber_data %>% 
+  group_by(Month, Hour) %>% 
+  summarize(Total = n())
+
+ggplot(Month_Hour, aes(Hour, Total, fill = Month)) +
+  geom_bar(stat="identity")+
+  labs(
+    title = "Uber Trips Per Hour Of the Day During Different Months",
+    subtitle = "April 2014 - Sep 2014)",
+    caption = "Data from Uber Rides in NYC dataset",
+    x = "Hours",
+    y = "Total Rides"
+  ) +
+  scale_y_continuous(labels = comma)
+```
+
+7 + 8. When we add months to the graph, we can say that the month to contribute the greatest number of trips at 5 pm was on September, followed by August and July. We can further this research to understand why that was the case.
+
+#### Heat Map
+
+Moving on, let us back it up with a heat map to make sure our hypothesis is correct.
+
+```{r Heat map}
+# Heat map by the Hours and Days
+Day_Hour <-
+  uber_data %>% 
+  group_by(Day, Hour) %>% 
+  summarize(Total = n())
+
+ggplot(Day_Hour, aes(Day, Hour, fill = Total)) +
+  geom_tile(color = "Black") +
+  scale_fill_gradient(low = "#02908b",
+                      high = "#002134",
+                      guide = "colorbar") +
+  labs(
+    title = "Uber Trips Per Hour Of the Day During Different Months",
+    subtitle = "April 2014 - Sep 2014)",
+    caption = "Data from Uber Rides in NYC dataset",
+    x = "Day",
+    y = "Hours"
+  ) 
+  
+```
+
+7. We can conclude that on all the days of the month the peak time for Uber rides starts from 3 pm onwards. With this information, Uber can adjust their model/algorithm to make sure there are enough drivers during those times to cater to all their customers, while conversely lowering the supply of drivers during early in the mornings between 1am and 5am.
+
+#### Peak Day Of The Week
+Now that we know our peak times, let’s find out which days of the week have the greatest number of trips from April to September.
+
+```{r per month per weekday}
+# Lets add the colors first for the graph
+colors = c("#046865","#CF5C36","#89CE94","#523249","#D9DBF1","#FFC857","#A42CD6")
+
+month_dayofweek <-
+  uber_data %>% 
+  group_by(Month, Day_of_week) %>% 
+  summarize(Total = n())
+
+ggplot(month_dayofweek, aes(Month, Total, fill = Day_of_week)) +
+  geom_bar(stat = "identity", position = "dodge")+
+  scale_fill_manual(values = colors)+
+   labs(
+    title = "Uber Trips Per Month and Per Weekday",
+    subtitle = "(April 2014 - Sep 2014)",
+    caption = "Data from Uber Rides in NYC dataset",
+    x = "Month",
+    y = "Total"
+  )+
+  scale_y_continuous(labels = comma)
+```
+
+7. If we would have created a graph without adding months, we would have gotten a result of Thursday being the peak day however that is not the case as the peak days changes depending on the month. But from this graph, we can tell that September had the greatest number of trips with Tuesday as the peak day.
+
+Final Takeaways:
+* Uber could increase the number of drives in these areas during peak times and peak days to cater to everyone. Users tend to change applications when it takes too long to find a driver.
+
+
+
